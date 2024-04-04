@@ -68,7 +68,7 @@ EverestData EverestCollimator_init_data(LocalParticle* part, EverestCollData col
     double mass_ratio = charge_ratio / LocalParticle_get_chi(part);
     double energy = ( LocalParticle_get_ptau(part) + 1 / LocalParticle_get_beta0(part)
                      ) * mass_ratio * LocalParticle_get_p0c(part) / 1e9; // energy in GeV
-    energy = LocalParticle_get_energy0(part) / 1e9;
+    energy = LocalParticle_get_energy0(part) / 1e9;   // TODO: to be removed
     calculate_scattering(everest, energy);
     calculate_ionisation_properties(everest, energy);
 #endif
@@ -80,7 +80,7 @@ EverestData EverestCollimator_init_data(LocalParticle* part, EverestCollData col
 void EverestCollimator_track_local_particle(EverestCollimatorData el, LocalParticle* part0) {
     int8_t active = EverestCollimatorData_get_active(el);
     active       *= EverestCollimatorData_get__tracking(el);
-    double const length  = EverestCollimatorData_get_length(el);
+    double const length = EverestCollimatorData_get_length(el);
 
     // Collimator geometry
     double const co_x       = EverestCollimatorData_get_ref_x(el);
@@ -110,6 +110,8 @@ void EverestCollimator_track_local_particle(EverestCollimatorData el, LocalParti
             int8_t is_valid = xcoll_check_particle_init(coll->rng, part);
 
             if (is_valid) {
+                double const s_coll = LocalParticle_get_s(part);
+
                 // Move to collimator frame
                 XYShift_single_particle(part, co_x, co_y);
                 SRotation_single_particle(part, sin_zL, cos_zL);
@@ -121,6 +123,11 @@ void EverestCollimator_track_local_particle(EverestCollimatorData el, LocalParti
                 // Return from collimator frame
                 SRotation_single_particle(part, -sin_zL, cos_zL);
                 XYShift_single_particle(part, -co_x, -co_y);
+
+                // Surviving particles are put at same numerical s
+                if (LocalParticle_get_state(part) > 0){
+                    LocalParticle_set_s(part, s_coll + length);
+                }
             }
         }
     //end_per_particle_block

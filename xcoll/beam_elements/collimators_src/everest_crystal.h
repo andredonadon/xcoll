@@ -53,14 +53,14 @@ EverestCollData EverestCrystal_init(EverestCrystalData el, LocalParticle* part0,
         coll->tilt_L   = asin(EverestCrystalData_get_sin_yL(el));
         coll->tilt_R   = asin(EverestCrystalData_get_sin_yR(el));
         if (fabs(coll->tilt_R) > 1.e-10){
-            printf("Crystals have to be left-sided for now, so tilt_R should not be set!");
-            fflush(stdout);
+            printf("Crystals have to be left-sided for now, so tilt_R should not be set!");  //only_for_context cpu_serial
+            fflush(stdout);                                                                  //only_for_context cpu_serial
             kill_all_particles(part0, XC_ERR_INVALID_XOFIELD);
         };
         coll->side     = EverestCrystalData_get__side(el);  // TODO: so far only left-sided crystals
         if (coll->side != 1){
-            printf("Crystals have to be left-sided for now!");
-            fflush(stdout);
+            printf("Crystals have to be left-sided for now!");  //only_for_context cpu_serial
+            fflush(stdout);                                     //only_for_context cpu_serial
             kill_all_particles(part0, XC_ERR_NOT_IMPLEMENTED);
         };
         // TODO: this should stay here
@@ -119,7 +119,7 @@ EverestData EverestCrystal_init_data(LocalParticle* part, EverestCollData coll){
 void EverestCrystal_track_local_particle(EverestCrystalData el, LocalParticle* part0) {
     int8_t active = EverestCrystalData_get_active(el);
     active       *= EverestCrystalData_get__tracking(el);
-    double length = EverestCrystalData_get_length(el);
+    double const length = EverestCrystalData_get_length(el);
 
     // Collimator geometry
     double const co_x       = EverestCrystalData_get_ref_x(el);
@@ -132,8 +132,8 @@ void EverestCrystal_track_local_particle(EverestCrystalData el, LocalParticle* p
     double const sin_zR     = EverestCrystalData_get_sin_zR(el);
     double const cos_zR     = EverestCrystalData_get_cos_zR(el);
     if (fabs(sin_zL-sin_zR) > 1.e-10 || fabs(cos_zL-cos_zR) > 1.e-10 ){
-        printf("Jaws with different angles not yet implemented!");
-        fflush(stdout);
+        printf("Jaws with different angles not yet implemented!");  //only_for_context cpu_serial
+        fflush(stdout);                                             //only_for_context cpu_serial
         kill_all_particles(part0, XC_ERR_NOT_IMPLEMENTED);
     };
 
@@ -172,7 +172,7 @@ void EverestCrystal_track_local_particle(EverestCrystalData el, LocalParticle* p
                 SRotation_single_particle(part, -sin_zL, cos_zL);
                 XYShift_single_particle(part, -co_x, -co_y);
 
-                // Surviving particles are put at same numerical s, and drifted inactive back
+                // Surviving particles are put at same numerical s
                 if (LocalParticle_get_state(part) > 0){
                     LocalParticle_set_s(part, s_coll + length);
                 }
