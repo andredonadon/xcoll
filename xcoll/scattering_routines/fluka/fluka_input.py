@@ -56,6 +56,7 @@ def _coll_dict(elements, names, dump=False):
                 elif ee.gap_R is not None:
                     nsig = ee.gap_R
                 half_gap = (ee._jaw_LU + ee._jaw_LD - ee._jaw_RU - ee._jaw_RD) / 4
+                # import pdb; pdb.set_trace()
                 offset   = (ee._jaw_LU + ee._jaw_LD + ee._jaw_RU + ee._jaw_RD) / 4
             tilt_1 = ee.tilt_L
             tilt_2 = ee.tilt_R
@@ -75,7 +76,8 @@ def _coll_dict(elements, names, dump=False):
             'tilt_1': tilt_1,
             'tilt_2': tilt_2,
             'nsig': nsig,
-            'half_gap': half_gap
+            'half_gap': half_gap,
+            'prototype': ee.prototype
         }
         if dump:
             # dump coll_dictionary in json format

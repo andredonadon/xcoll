@@ -63,8 +63,10 @@ def track(coll, particles):
     if np.any([pdg_id == 0 for pdg_id in particles.pdg_id]):
         raise ValueError("Some particles are missing the pdg_id!")
 
+    # import pdb; pdb.set_trace()
     _drift(coll, particles, -coll.length_front)
     #FLUKA collimators are centered; need to shift
+    # import pdb; pdb.set_trace()
     if coll.co is not None:
         dx = coll.co[1][0]
         dy = coll.co[1][1]
