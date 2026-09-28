@@ -151,6 +151,16 @@ def _beam_include_file(particle_ref, bb_int=False):
     else:
         raise ValueError(f"Reference particle {get_name_from_pdg_id(pdg_id)} not "
                         + "supported by FLUKA.")
+    if bb_int:
+        int_type = int(round(bb_int['int_type']))
+        elastic = int_type > 0 and (int_type // 10) % 10 > 0
+        A_b1 = get_properties_from_pdg_id(pdg_id)[1] if _is_ion(pdg_id) else 1
+        b2_is_proton = (int(round(bb_int['Z'])), int(round(bb_int['A']))) in [(1, 1), (0, 0)]
+        if elastic and A_b1 > 1 and not b2_is_proton:
+            raise ValueError("Elastic beam-beam collisions between two nuclei are not "
+                           + "available in FLUKA (EVFLGT stops for ion-ion elastic). Use "
+                           + "an inelastic (1) or EMD (100) interaction type, or a proton "
+                           + "as one of the two beams.")
     beam = f"BEAM      {format_fluka_float(momentum_cut)}{50*' '}{name}"
     template = f"""\
 ******************************************************************************
