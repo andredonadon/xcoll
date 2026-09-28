@@ -17,11 +17,36 @@ ions = True
 dump = False
 
 
+def other_beam_at_ip(tw, ip, line_b2=None):
+    # The FLUKA source expects the optics and closed orbit of the other beam in its
+    # own reference frame (s along its motion, x mirrored). Passing the tracked
+    # beam's twiss instead mirrors its crossing angle and removes the crossing.
+    if line_b2 is not None:
+        # Counter-rotating line, in its own frame
+        row = line_b2.twiss().rows[ip]
+        return {kk: row[kk][0] for kk in ['x', 'px', 'y', 'py', 'betx', 'bety',
+                                          'alfx', 'alfy', 'dx', 'dpx', 'dy', 'dpy']}
+    # Fallback: mirror the tracked beam through the IP, assuming the two beams are
+    # mirror images of each other (LHC design; the crossing angles of the real b1/b2
+    # lines agree within 0.3% at IP1/2/5/8). In the lab the other beam's orbit is
+    # the transverse reflection of this one; going to its own frame (s -> -s, x -> -x)
+    # gives x2 = x1, px2 = -px1, y2 = -y1, py2 = py1 (dispersion transforms like the
+    # orbit). Beta and alpha are copied (alpha only enters FLUKA as alpha**2).
+    row = tw.rows[ip]
+    return {'x':     row.x[0],   'px':   -row.px[0],
+            'y':    -row.y[0],   'py':    row.py[0],
+            'betx':  row.betx[0], 'bety': row.bety[0],
+            'alfx':  row.alfx[0], 'alfy': row.alfy[0],
+            'dx':    row.dx[0],  'dpx':  -row.dpx[0],
+            'dy':   -row.dy[0],  'dpy':   row.dpy[0]}
+
+
 def FlukaBeamBeamSource(line, colldb, int_type, ip, num_particles, pdg_id_b1, p0c_b1, Z_b2, A_b2,
-                        sigma_p_x2 = 0, sigma_p_y2 = 0, sigma_z = 0, sigma_dpp = 0):
+                        sigma_p_x2 = 0, sigma_p_y2 = 0, sigma_z = 0, sigma_dpp = 0, line_b2 = None):
 
     _capacity = num_particles * 10000
     tw = line.twiss()
+    b2 = other_beam_at_ip(tw, ip, line_b2=line_b2)
     if ip == "ip1":
         xsx = line["on_x1"]
         xsv = 0
@@ -61,17 +86,17 @@ def FlukaBeamBeamSource(line, colldb, int_type, ip, num_particles, pdg_id_b1, p0
             'sigma_p_y2': sigma_p_y2,
             'Z': Z_b2,
             'A': A_b2,
-            'betx': (tw.rows[ip].betx)[0],
-            'bety': (tw.rows[ip].bety)[0],
-            'dx': (tw.rows[ip].dx)[0],
-            'dy': (tw.rows[ip].dy)[0],
-            'alfx': (tw.rows[ip].alfx)[0],
-            'alfy': (tw.rows[ip].alfy)[0],
-            'dpx': (tw.rows[ip].dpx)[0],
-            'dpy': (tw.rows[ip].dpy)[0],
+            'betx': b2['betx'],
+            'bety': b2['bety'],
+            'dx': b2['dx'],
+            'dy': b2['dy'],
+            'alfx': b2['alfx'],
+            'alfy': b2['alfy'],
+            'dpx': b2['dpx'],
+            'dpy': b2['dpy'],
             'rms_emx': colldb.nemitt_x, #/(tw.beta0* tw.gamma0),
             'rms_emy': colldb.nemitt_y, #/(tw.beta0* tw.gamma0)
-            'offset': [tw.rows[ip].x[0], tw.rows[ip].px[0], tw.rows[ip].y[0], tw.rows[ip].py[0]],
+            'offset': [b2['x'], b2['px'], b2['y'], b2['py']],
             'sigma_z': sigma_z * 1e2,
             'sigma_dpp': sigma_dpp
             }
@@ -129,12 +154,16 @@ path_out.mkdir(exist_ok=True)
 num_particles = int(100)
 
 line = xt.load(path_in / 'machines' / f'levelling.23_b{beam}.json')
+# Counter-rotating beam (in its own frame), for the optics/orbit of the other beam at the IP.
+# Set to None to mirror the tracked beam instead (assumes the beams are mirror images).
+line_b2 = xt.load(path_in / 'machines' / f'levelling.23_b{3 - beam}.json')
 colldb = xc.CollimatorDatabase.from_yaml(path_in / "colldbs" / f'levelling.23.yaml', beam=beam)
 
 if not ions:
     # p-p example
     part = FlukaBeamBeamSource(
         line=line,
+        line_b2=line_b2,
         colldb=colldb,
         int_type=1.0, # 1.0 inelastic, 10.0 elastic, 100.0 Emd
         ip="ip1",
@@ -151,6 +180,7 @@ if ions:
     # Pb-Pb example
     part = FlukaBeamBeamSource(
         line=line,
+        line_b2=line_b2,
         colldb=colldb,
         int_type=1.0, # 1.0 inelastic, 10.0 elastic, 100.0 Emd
         ip="ip1",
