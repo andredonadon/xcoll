@@ -206,13 +206,18 @@ def track_core(coll, part):
 
         # Update energy
         E_diff[idx_alive] = part.energy[idx_alive] - data['e'][:npart][mask_alive] * 1.e6
-        if np.any(E_diff < -precision):
-            raise ValueError(f"FLUKA returned particle with energy higher than incoming particle!")
-        E_diff[E_diff < precision] = 0. # Lower cut on energy loss
-        part.add_to_energy(-E_diff)
-        part.weight[idx_alive] = data['weight'][:npart][mask_alive]
-        coll._acc_ionisation_loss     += np.sum(E_diff[idx_alive_prim]*part.weight[idx_alive_prim])
-        coll._acc_ionisation_loss_sec += np.sum(E_diff[idx_alive_sec]*part.weight[idx_alive_sec])
+        if xc.fluka.engine._beam_beam:
+            E_diff[np.abs(E_diff) < precision] = 0.
+            part.add_to_energy(-E_diff)
+            part.weight[idx_alive] = data['weight'][:npart][mask_alive]
+        else:
+            if np.any(E_diff < -precision):
+                raise ValueError(f"FLUKA returned particle with energy higher than incoming particle!")
+            E_diff[E_diff < precision] = 0. # Lower cut on energy loss
+            part.add_to_energy(-E_diff)
+            part.weight[idx_alive] = data['weight'][:npart][mask_alive]
+            coll._acc_ionisation_loss     += np.sum(E_diff[idx_alive_prim]*part.weight[idx_alive_prim])
+            coll._acc_ionisation_loss_sec += np.sum(E_diff[idx_alive_sec]*part.weight[idx_alive_sec])
         mask_hit = ~np.isclose(E_diff, 0.) # Hit (MCS)
 
         rpp = part.rpp[idx_alive]  # This is now already updated by the new energy
