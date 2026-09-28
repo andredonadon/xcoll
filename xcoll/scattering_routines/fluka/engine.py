@@ -59,6 +59,7 @@ class FlukaEngine(BaseEngine):
         self._server_process = None
         self._flukaio_connected = False
         self._rfluka_warning_given = False
+        self._beam_beam = False
         kwargs.setdefault('_timeout_sec', 36000)
         kwargs.setdefault('_network_port', -1)
         kwargs.setdefault('_max_particle_id', -1)
@@ -199,6 +200,7 @@ class FlukaEngine(BaseEngine):
         import xcoll as xc
         xc.fluka.interface.assert_gfortran_installed()
         xc.fluka.interface.set_fluka_environment()
+        self._beam_beam = bool(kwargs.get('bb_int', False))
         return kwargs
 
 
@@ -229,6 +231,7 @@ class FlukaEngine(BaseEngine):
         self._log = None
         self._network_port = -1
         self._max_particle_id = -1
+        self._beam_beam = False
         return kwargs
 
 
