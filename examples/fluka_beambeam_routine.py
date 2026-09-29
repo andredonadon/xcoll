@@ -42,8 +42,12 @@ def other_beam_at_ip(tw, ip, line_b2=None):
 
 
 def FlukaBeamBeamSource(line, colldb, int_type, ip, num_particles, pdg_id_b1, p0c_b1, Z_b2, A_b2,
-                        sigma_p_x2 = 0, sigma_p_y2 = 0, sigma_z = 0, sigma_dpp = 0, line_b2 = None,
+                        sigma_p_x2 = 0, sigma_p_y2 = 0, sigma_z = 0, sigma_dpp = None, line_b2 = None,
                         seed = None):
+
+    if seed is not None:
+        xc.fluka.engine.seed = seed
+        np.random.seed(seed)
 
     relative_capacity = 400 if ions else 20
     _capacity = num_particles * relative_capacity
@@ -112,6 +116,28 @@ def FlukaBeamBeamSource(line, colldb, int_type, ip, num_particles, pdg_id_b1, p0
     dummy_length = 0.502
     insertion_length = min(2 * 4 * sigma_z_lum, dummy_length)
 
+    # Longitudinal coordinates of the tracked bunch, matched to the RF bucket for sigma_z.
+    # Beam-2 momentum spread: same matching with beam 2's own species on its line (or on the
+    # tracked line if no beam-2 line is given), unless sigma_dpp is given explicitly.
+    zeta, delta = xp.generate_longitudinal_coordinates(
+        num_particles=num_particles, distribution='gaussian', sigma_z=sigma_z,
+        line=line, particle_ref=ref_b1)
+    if sigma_dpp is None:
+        if line_b2 is not None:
+            pdg_b2 = 2212 if (Z2, A2) == (1, 1) else 1000000000 + Z2 * 10000 + A2 * 10
+            ref_b2 = xt.Particles.reference_from_pdg_id(pdg_id=pdg_b2, p0c=p0c_b1 / ref_b1.q0 * Z2)
+            _, delta_b2 = xp.generate_longitudinal_coordinates(
+                num_particles=10000, distribution='gaussian', sigma_z=sigma_z,
+                line=line_b2, particle_ref=ref_b2)
+            source = 'matched on line_b2'
+        else:
+            _, delta_b2 = xp.generate_longitudinal_coordinates(
+                num_particles=10000, distribution='gaussian', sigma_z=sigma_z,
+                line=line, particle_ref=ref_b1)
+            source = 'matched on the tracked line'
+        sigma_dpp = float(np.std(delta_b2))
+        print(f"Beam-2 momentum spread: {sigma_dpp:.2e} ({source}, sigma_z = {sigma_z*1e2:.1f} cm)")
+
 
     bb_int = {
             'int_type': int_type,
@@ -143,9 +169,6 @@ def FlukaBeamBeamSource(line, colldb, int_type, ip, num_particles, pdg_id_b1, p0
     xc.fluka.engine.minimum_free_length_fortran_array = relative_capacity
     xc.fluka.engine.relative_length_fortran_array = relative_capacity
 
-    if seed is not None:
-        xc.fluka.engine.seed = seed
-        np.random.seed(seed)
     # FLUKA generates the collision in the rest frame of the other beam's nucleus, i.e.
     # at ~2 gamma^2 m per nucleon (~1.5e7 GeV/n for Pb-Pb at 6.8 Z TeV). By default the
     # high-energy model (DPMJET, used for ion-ion) is only initialised up to the BEAM-card
@@ -188,9 +211,6 @@ def FlukaBeamBeamSource(line, colldb, int_type, ip, num_particles, pdg_id_b1, p0
     # Matched Gaussian bunch at the IP itself (the matched-bunch generator matches at the
     # start of the line, i.e. IP1 for the LHC lines, whatever `ip` is)
     tt = line.get_table()
-    zeta, delta = xp.generate_longitudinal_coordinates(
-        num_particles=num_particles, distribution='gaussian', sigma_z=sigma_z,
-        line=line, particle_ref=xc.fluka.engine.particle_ref)
     x_norm, px_norm = xp.generate_2D_gaussian(num_particles)
     y_norm, py_norm = xp.generate_2D_gaussian(num_particles)
     part_init = line.build_particles(x_norm=x_norm, px_norm=px_norm,
@@ -250,7 +270,7 @@ if not ions:
         Z_b2=1,
         A_b2=1,
         sigma_z = 8e-2,
-        sigma_dpp = 1.1e-4,
+        sigma_dpp = None,
         seed = 5656565
     )
 
@@ -268,7 +288,7 @@ if ions:
         Z_b2=82,
         A_b2=208,
         sigma_z = 8e-2,
-        sigma_dpp = 1.1e-4,
+        sigma_dpp = None,
         seed = 5656565
     )
 
