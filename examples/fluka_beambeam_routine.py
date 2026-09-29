@@ -164,26 +164,44 @@ def FlukaBeamBeamSource(line, colldb, int_type, ip, num_particles, pdg_id_b1, p0
 
     line.build_tracker()
 
-    nemitt_x = colldb.nemitt_x
-    nemitt_y = colldb.nemitt_y
-    bunch_intensity = 1.8E11
-    particles = xp.generate_matched_gaussian_bunch(
-        num_particles=num_particles, total_intensity_particles=bunch_intensity,
-        nemitt_x=nemitt_x, nemitt_y=nemitt_y, sigma_z=sigma_z,
-        line=line, particle_ref=xc.fluka.engine.particle_ref)
+    # nemitt_x = colldb.nemitt_x
+    # nemitt_y = colldb.nemitt_y
+    # bunch_intensity = 1.8E11
+    # particles = xp.generate_matched_gaussian_bunch(
+    #     num_particles=num_particles, total_intensity_particles=bunch_intensity,
+    #     nemitt_x=nemitt_x, nemitt_y=nemitt_y, sigma_z=sigma_z,
+    #     line=line, particle_ref=xc.fluka.engine.particle_ref)
+    # tt = line.get_table()
+    # part_init = line.build_particles(x=particles.x, y=particles.y,
+    #                         px=particles.px,
+    #                         py=particles.py,
+    #                         zeta=particles.zeta,
+    #                         delta=particles.delta,
+    #                         nemitt_x=colldb.nemitt_x,
+    #                         nemitt_y=colldb.nemitt_y,
+    #                         at_element=ip,
+    #                         match_at_s=tt['s', ip],
+    #                         particle_ref=xc.fluka.engine.particle_ref,
+    #                         _capacity=_capacity,
+    # mode="normalized_transverse")
+
+    # Matched Gaussian bunch at the IP itself (the matched-bunch generator matches at the
+    # start of the line, i.e. IP1 for the LHC lines, whatever `ip` is)
     tt = line.get_table()
-    part_init = line.build_particles(x=particles.x, y=particles.y,
-                            px=particles.px,
-                            py=particles.py,
-                            zeta=particles.zeta,
-                            delta=particles.delta,
+    zeta, delta = xp.generate_longitudinal_coordinates(
+        num_particles=num_particles, distribution='gaussian', sigma_z=sigma_z,
+        line=line, particle_ref=xc.fluka.engine.particle_ref)
+    x_norm, px_norm = xp.generate_2D_gaussian(num_particles)
+    y_norm, py_norm = xp.generate_2D_gaussian(num_particles)
+    part_init = line.build_particles(x_norm=x_norm, px_norm=px_norm,
+                            y_norm=y_norm, py_norm=py_norm,
+                            zeta=zeta, delta=delta,
                             nemitt_x=colldb.nemitt_x,
                             nemitt_y=colldb.nemitt_y,
                             at_element=ip,
                             match_at_s=tt['s', ip],
                             particle_ref=xc.fluka.engine.particle_ref,
-                            _capacity=_capacity,
-    mode="normalized_transverse")
+                            _capacity=_capacity)
     part = part_init.copy()
 
     s_ip = part.s[part.state > 0][0]
