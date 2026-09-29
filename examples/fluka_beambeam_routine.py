@@ -98,6 +98,12 @@ def FlukaBeamBeamSource(line, colldb, int_type, ip, num_particles, pdg_id_b1, p0
     print(f"Luminous region: sigma_z_lum = {sigma_z_lum*1e2:.2f} cm (bunch sigma_z = {sigma_z*1e2:.2f} cm, "
           f"half crossing = ({theta_x*1e6:.1f}, {theta_y*1e6:.1f}) urad, Piwinski = {math.sqrt(piwinski_sq):.3f})")
 
+    # FLUKA samples the collision within an insertion of length L around its centre and
+    # expects the particles at IP - L/2: take L = +-4 sigma_z_lum (capped by the dummy
+    # length, so the collisions stay inside the FLUKA IP pipe) and drift by -L/2 below.
+    dummy_length = 0.502
+    insertion_length = min(2 * 4 * sigma_z_lum, dummy_length)
+
 
     bb_int = {
             'int_type': int_type,
@@ -119,10 +125,11 @@ def FlukaBeamBeamSource(line, colldb, int_type, ip, num_particles, pdg_id_b1, p0
             'rms_emy': colldb.nemitt_y, #/(tw.beta0* tw.gamma0)
             'offset': [b2['x'], b2['px'], b2['y'], b2['py']],
             'sigma_z': sigma_z_lum * 1e2,  # collision-position spread [cm]
+            'insertion_length': insertion_length * 1e2,  # [cm]
             'sigma_dpp': sigma_dpp
             }
 
-    coll_dummy = xc.FlukaCollimator(assembly="lhc_ippipe", length=0.6, jaw=0.001)
+    coll_dummy = xc.FlukaCollimator(assembly="lhc_ippipe", length=dummy_length, jaw=0.001)
 
     xc.fluka.engine.particle_ref = xt.Particles.reference_from_pdg_id(pdg_id=pdg_id_b1, p0c=p0c_b1)
     xc.fluka.engine.minimum_free_length_fortran_array = relative_capacity
@@ -169,10 +176,17 @@ def FlukaBeamBeamSource(line, colldb, int_type, ip, num_particles, pdg_id_b1, p0
     mode="normalized_transverse")
     part = part_init.copy()
 
+    s_ip = part.s[part.state > 0][0]
+    xt.Drift(length=-insertion_length / 2, model="exact").track(part)
+
     print(f"Tracking {num_particles} particles (FLUKA)...     ", end='')
     start = time.time()
     coll_dummy.track(part)
     print(f"Done in {round(time.time()-start, 3)}s.")
+
+    # Back to the IP (pure drift around the IP), to restart the tracking from there
+    alive = part.state > 0
+    xt.Drift(length=s_ip - part.s[alive][0], model="exact").track(part)
     xc.fluka.engine.stop(clean=False)
 
     line.discard_tracker()
