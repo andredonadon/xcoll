@@ -44,7 +44,8 @@ def other_beam_at_ip(tw, ip, line_b2=None):
 def FlukaBeamBeamSource(line, colldb, int_type, ip, num_particles, pdg_id_b1, p0c_b1, Z_b2, A_b2,
                         sigma_p_x2 = 0, sigma_p_y2 = 0, sigma_z = 0, sigma_dpp = 0, line_b2 = None):
 
-    _capacity = num_particles * 10000
+    relative_capacity = 400 if ions else 20
+    _capacity = num_particles * relative_capacity
     tw = line.twiss()
     b2 = other_beam_at_ip(tw, ip, line_b2=line_b2)
     if ip == "ip1":
@@ -124,8 +125,8 @@ def FlukaBeamBeamSource(line, colldb, int_type, ip, num_particles, pdg_id_b1, p0
     coll_dummy = xc.FlukaCollimator(assembly="lhc_ippipe", length=0.6, jaw=0.001)
 
     xc.fluka.engine.particle_ref = xt.Particles.reference_from_pdg_id(pdg_id=pdg_id_b1, p0c=p0c_b1)
-    xc.fluka.engine.minimum_free_length_fortran_array = _capacity
-    xc.fluka.engine.relative_length_fortran_array = 200 if ions else 20
+    xc.fluka.engine.minimum_free_length_fortran_array = relative_capacity
+    xc.fluka.engine.relative_length_fortran_array = relative_capacity
 
     # xc.fluka.engine.seed = 5656565
     # FLUKA generates the collision in the rest frame of the other beam's nucleus, i.e.
