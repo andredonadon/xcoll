@@ -42,7 +42,8 @@ def other_beam_at_ip(tw, ip, line_b2=None):
 
 
 def FlukaBeamBeamSource(line, colldb, int_type, ip, num_particles, pdg_id_b1, p0c_b1, Z_b2, A_b2,
-                        sigma_p_x2 = 0, sigma_p_y2 = 0, sigma_z = 0, sigma_dpp = 0, line_b2 = None):
+                        sigma_p_x2 = 0, sigma_p_y2 = 0, sigma_z = 0, sigma_dpp = 0, line_b2 = None,
+                        seed = None):
 
     relative_capacity = 400 if ions else 20
     _capacity = num_particles * relative_capacity
@@ -72,11 +73,14 @@ def FlukaBeamBeamSource(line, colldb, int_type, ip, num_particles, pdg_id_b1, p0
         theta2 = -theta2
         phi_ir = -phi_ir
 
-    geo_emittance_x = tw.beta0*tw.gamma0*colldb.nemitt_x
-    geo_emittance_y = tw.beta0*tw.gamma0*colldb.nemitt_y
+    ref_b1 = xt.Particles.reference_from_pdg_id(pdg_id=pdg_id_b1, p0c=p0c_b1)
+    betagamma_b1 = ref_b1.beta0[0] * ref_b1.gamma0[0]
 
-    sigma_p_x2 = (geo_emittance_x*(tw.rows[ip].gamx)[0])**0.5
-    sigma_p_y2 = (geo_emittance_y*(tw.rows[ip].gamy)[0])**0.5
+    # Beam-2 divergence at the IP (only used by FLUKA when no optics are given)
+    Z2, A2 = max(Z_b2, 1), max(A_b2, 1)
+    betagamma_b2 = (p0c_b1 / ref_b1.q0 * Z2) / (xt.PROTON_MASS_EV if A2 == 1 else A2 * 931.49410242e6)
+    sigma_p_x2 = (colldb.nemitt_x / betagamma_b2 * (1 + b2['alfx']**2) / b2['betx'])**0.5
+    sigma_p_y2 = (colldb.nemitt_y / betagamma_b2 * (1 + b2['alfy']**2) / b2['bety'])**0.5
 
     # FLUKA samples the collision position with the luminous-region length, not the
     # bunch length: for two Gaussian bunches of rms length sigma_z crossing with
@@ -85,8 +89,6 @@ def FlukaBeamBeamSource(line, colldb, int_type, ip, num_particles, pdg_id_b1, p0
     # The half-angles follow from both beams' IP angles (the other beam in its own frame).
     # Geometric emittance with the tracked species' beta*gamma (the line's own reference
     # particle may be a proton; the optics are the same at equal rigidity).
-    ref_b1 = xt.Particles.reference_from_pdg_id(pdg_id=pdg_id_b1, p0c=p0c_b1)
-    betagamma_b1 = ref_b1.beta0[0] * ref_b1.gamma0[0]
     emit_geo_x = colldb.nemitt_x / betagamma_b1
     emit_geo_y = colldb.nemitt_y / betagamma_b1
     sigma_x_ip = (tw.rows[ip].betx[0] * emit_geo_x)**0.5
@@ -135,7 +137,9 @@ def FlukaBeamBeamSource(line, colldb, int_type, ip, num_particles, pdg_id_b1, p0
     xc.fluka.engine.minimum_free_length_fortran_array = relative_capacity
     xc.fluka.engine.relative_length_fortran_array = relative_capacity
 
-    # xc.fluka.engine.seed = 5656565
+    if seed is not None:
+        xc.fluka.engine.seed = seed
+        np.random.seed(seed)
     # FLUKA generates the collision in the rest frame of the other beam's nucleus, i.e.
     # at ~2 gamma^2 m per nucleon (~1.5e7 GeV/n for Pb-Pb at 6.8 Z TeV). By default the
     # high-energy model (DPMJET, used for ion-ion) is only initialised up to the BEAM-card
@@ -186,7 +190,8 @@ def FlukaBeamBeamSource(line, colldb, int_type, ip, num_particles, pdg_id_b1, p0
 
     # Back to the IP (pure drift around the IP), to restart the tracking from there
     alive = part.state > 0
-    xt.Drift(length=s_ip - part.s[alive][0], model="exact").track(part)
+    if np.any(alive):
+        xt.Drift(length=s_ip - part.s[alive][0], model="exact").track(part)
     xc.fluka.engine.stop(clean=False)
 
     line.discard_tracker()
@@ -221,7 +226,8 @@ if not ions:
         Z_b2=1,
         A_b2=1,
         sigma_z = 8e-2,
-        sigma_dpp = 1.1e-4
+        sigma_dpp = 1.1e-4,
+        seed = 5656565
     )
 
 if ions:
@@ -238,7 +244,8 @@ if ions:
         Z_b2=82,
         A_b2=208,
         sigma_z = 8e-2,
-        sigma_dpp = 1.1e-4
+        sigma_dpp = 1.1e-4,
+        seed = 5656565
     )
 
 
