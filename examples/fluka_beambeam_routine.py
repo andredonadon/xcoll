@@ -49,29 +49,35 @@ def FlukaBeamBeamSource(line, colldb, int_type, ip, num_particles, pdg_id_b1, p0
     _capacity = num_particles * relative_capacity
     tw = line.twiss()
     b2 = other_beam_at_ip(tw, ip, line_b2=line_b2)
-    if ip == "ip1":
-        xsx = line["on_x1"]
-        xsv = 0
-        phi_ir = line['phi_ir1']
-    elif ip == "ip2":
-        xsx = line["on_x2h"]
-        phi_ir = line['phi_ir2']
-        xsv = line["on_x2v"]
-    elif ip == "ip5":
-        xsx = line["on_x5"]
-        xsv = 0
-        phi_ir = line['phi_ir5']
-    elif ip == "ip8":
-        xsx = line["on_x8h"]
-        xsv = line["on_x8v"]
-        phi_ir = line['phi_ir8']
+    # if ip == "ip1":
+    #     xsx = line["on_x1"]
+    #     xsv = 0
+    #     phi_ir = line['phi_ir1']
+    # elif ip == "ip2":
+    #     xsx = line["on_x2h"]
+    #     phi_ir = line['phi_ir2']
+    #     xsv = line["on_x2v"]
+    # elif ip == "ip5":
+    #     xsx = line["on_x5"]
+    #     xsv = 0
+    #     phi_ir = line['phi_ir5']
+    # elif ip == "ip8":
+    #     xsx = line["on_x8h"]
+    #     xsv = line["on_x8v"]
+    #     phi_ir = line['phi_ir8']
+    #
+    # theta2 = (math.sqrt(xsx**2 + xsv**2) * 1e-6)
+    #
+    # # if theta2 is negative, make it positive and change sing to phi_ir
+    # if xsx < 0 or xsv < 0:
+    #     theta2 = -theta2
+    #     phi_ir = -phi_ir
 
-    theta2 = (math.sqrt(xsx**2 + xsv**2) * 1e-6)
-
-    # if theta2 is negative, make it positive and change sing to phi_ir
-    if xsx < 0 or xsv < 0:
-        theta2 = -theta2
-        phi_ir = -phi_ir
+    # Beam-2 direction for FLUKA without optics, from its orbit at the IP (FLUKA's lab
+    # momentum is (-x', +y') in beam 2's own frame): theta2 >= 0 (angle to -z), phi_ir the
+    # plane angle in degrees. Includes the sign of the crossing and the spectrometer bumps.
+    theta2 = math.atan(math.hypot(b2['px'], b2['py']))
+    phi_ir = math.degrees(math.atan2(b2['py'], -b2['px']))
 
     ref_b1 = xt.Particles.reference_from_pdg_id(pdg_id=pdg_id_b1, p0c=p0c_b1)
     betagamma_b1 = ref_b1.beta0[0] * ref_b1.gamma0[0]
