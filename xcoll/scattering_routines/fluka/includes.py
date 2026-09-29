@@ -3,6 +3,7 @@
 # Copyright (c) CERN, 2025.                 #
 # ######################################### #
 
+import warnings
 from math import sqrt
 
 import xtrack as xt
@@ -161,6 +162,16 @@ def _beam_include_file(particle_ref, bb_int=False):
                            + "available in FLUKA (EVFLGT stops for ion-ion elastic). Use "
                            + "an inelastic (1) or EMD (100) interaction type, or a proton "
                            + "as one of the two beams.")
+        insertion_length = bb_int.get('insertion_length', 20)
+        if bb_int['sigma_z'] > 0:
+            if insertion_length <= 0:
+                raise ValueError("The beam-beam insertion length must be positive when "
+                               + "sigma_z > 0 (FLUKA would resample the collision "
+                               + "position forever).")
+            if insertion_length / 2 < 2 * bb_int['sigma_z']:
+                warnings.warn(f"Beam-beam insertion length ({insertion_length} cm) is "
+                            + f"shorter than +-2 sigma_z ({bb_int['sigma_z']} cm): many "
+                            + "collision positions will be resampled.")
     beam = f"BEAM      {format_fluka_float(momentum_cut)}{50*' '}{name}"
     template = f"""\
 ******************************************************************************
@@ -180,7 +191,7 @@ BEAMPOS
 * W(1): interaction type, W(2): Index IR, W(3): Length of IR[cm], W(4): SigmaZ
 * Interaction type: 1.0 (Inelastic), 10.0 (Elastic), 100.0 (EMD)
 * SigmaZ: sigma_z (cm) for the Gaussian sampling of the collision position around the center of the insertion
-SOURCE    {format_fluka_float(bb_int['int_type'])}{format_fluka_float(1)}{format_fluka_float(20)}{format_fluka_float(bb_int['sigma_z'])}
+SOURCE    {format_fluka_float(bb_int['int_type'])}{format_fluka_float(1)}{format_fluka_float(insertion_length)}{format_fluka_float(bb_int['sigma_z'])}
 SOURCE           89.       90.       91.        0.                    &
 * ..+....1....+....2....+....3....+....4....+....5....+....6....+....7..
 * W(1): Theta2-> Polar angle (rad) between b2 and -z direction.
