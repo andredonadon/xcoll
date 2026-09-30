@@ -7,14 +7,24 @@ import matplotlib.pyplot as plt
 import xtrack as xt
 import xcoll as xc
 import xpart as xp
+from xtrack.particles import pdg
 
 
 path_in = Path(__file__).parent
 path_out = Path.cwd()
 
 beam = 1
-ions = True
+ip = 'ip1'
+species_b1 = 'Pb208'          # tracked beam: 'proton', 'Pb208', 'O16', ...
+species_b2 = 'Pb208'          # other beam, can differ (p-Pb, Pb-p)
+energy_per_charge = 6.8e12    # p0c per unit charge [eV], same rigidity for both beams
+interaction = 'inelastic'     # 'inelastic', 'elastic', 'emd'
+num_particles = 100
+sigma_z = 8e-2
+seed = 5656565
 dump = False
+
+INTERACTION_CODE = {'inelastic': 1.0, 'elastic': 10.0, 'emd': 100.0}
 
 
 def other_beam_at_ip(tw, ip, line_b2=None):
@@ -41,41 +51,15 @@ def other_beam_at_ip(tw, ip, line_b2=None):
             'dy':   -row.dy[0],  'dpy':   row.dpy[0]}
 
 
-def FlukaBeamBeamSource(line, colldb, int_type, ip, num_particles, pdg_id_b1, p0c_b1, Z_b2, A_b2,
-                        sigma_p_x2 = 0, sigma_p_y2 = 0, sigma_z = 0, sigma_dpp = None, line_b2 = None,
-                        seed = None):
+def FlukaBeamBeamSource(line, colldb, int_type, ip, num_particles, pdg_id_b1, p0c_b1, pdg_id_b2,
+                        sigma_z = 0, sigma_dpp = None, line_b2 = None, seed = None):
 
     if seed is not None:
         xc.fluka.engine.seed = seed
         np.random.seed(seed)
 
-    relative_capacity = 400 if ions else 20
-    _capacity = num_particles * relative_capacity
     tw = line.twiss()
     b2 = other_beam_at_ip(tw, ip, line_b2=line_b2)
-    # if ip == "ip1":
-    #     xsx = line["on_x1"]
-    #     xsv = 0
-    #     phi_ir = line['phi_ir1']
-    # elif ip == "ip2":
-    #     xsx = line["on_x2h"]
-    #     phi_ir = line['phi_ir2']
-    #     xsv = line["on_x2v"]
-    # elif ip == "ip5":
-    #     xsx = line["on_x5"]
-    #     xsv = 0
-    #     phi_ir = line['phi_ir5']
-    # elif ip == "ip8":
-    #     xsx = line["on_x8h"]
-    #     xsv = line["on_x8v"]
-    #     phi_ir = line['phi_ir8']
-    #
-    # theta2 = (math.sqrt(xsx**2 + xsv**2) * 1e-6)
-    #
-    # # if theta2 is negative, make it positive and change sing to phi_ir
-    # if xsx < 0 or xsv < 0:
-    #     theta2 = -theta2
-    #     phi_ir = -phi_ir
 
     # Beam-2 direction for FLUKA without optics, from its orbit at the IP (FLUKA's lab
     # momentum is (-x', +y') in beam 2's own frame): theta2 >= 0 (angle to -z), phi_ir the
@@ -86,9 +70,17 @@ def FlukaBeamBeamSource(line, colldb, int_type, ip, num_particles, pdg_id_b1, p0
     ref_b1 = xt.Particles.reference_from_pdg_id(pdg_id=pdg_id_b1, p0c=p0c_b1)
     betagamma_b1 = ref_b1.beta0[0] * ref_b1.gamma0[0]
 
+    # Spare room in the particle arrays for the secondaries (ion fragments need more)
+    is_ion = round(ref_b1.mass0 / 931.49410242e6) > 1
+    relative_capacity = 400 if is_ion else 20
+    _capacity = num_particles * relative_capacity
+
+    # Other beam at the same rigidity
+    _, A_b2, Z_b2, _ = pdg.get_properties_from_pdg_id(pdg.get_pdg_id_from_name(pdg_id_b2))
+    ref_b2 = xt.Particles.reference_from_pdg_id(pdg_id=pdg_id_b2, p0c=p0c_b1 / ref_b1.q0 * Z_b2)
+    betagamma_b2 = ref_b2.beta0[0] * ref_b2.gamma0[0]
+
     # Beam-2 divergence at the IP (only used by FLUKA when no optics are given)
-    Z2, A2 = max(Z_b2, 1), max(A_b2, 1)
-    betagamma_b2 = (p0c_b1 / ref_b1.q0 * Z2) / (xt.PROTON_MASS_EV if A2 == 1 else A2 * 931.49410242e6)
     sigma_p_x2 = (colldb.nemitt_x / betagamma_b2 * (1 + b2['alfx']**2) / b2['betx'])**0.5
     sigma_p_y2 = (colldb.nemitt_y / betagamma_b2 * (1 + b2['alfy']**2) / b2['bety'])**0.5
 
@@ -96,16 +88,19 @@ def FlukaBeamBeamSource(line, colldb, int_type, ip, num_particles, pdg_id_b1, p0
     # bunch length: for two Gaussian bunches of rms length sigma_z crossing with
     # half-angles theta_x/y (Piwinski, hourglass neglected)
     #   sigma_lum = sigma_z / sqrt(2) / sqrt(1 + (theta_x sigma_z/sigma_x)^2 + (theta_y sigma_z/sigma_y)^2)
-    # The half-angles follow from both beams' IP angles (the other beam in its own frame).
-    # Geometric emittance with the tracked species' beta*gamma (the line's own reference
-    # particle may be a proton; the optics are the same at equal rigidity).
-    emit_geo_x = colldb.nemitt_x / betagamma_b1
-    emit_geo_y = colldb.nemitt_y / betagamma_b1
-    sigma_x_ip = (tw.rows[ip].betx[0] * emit_geo_x)**0.5
-    sigma_y_ip = (tw.rows[ip].bety[0] * emit_geo_y)**0.5
+    # with sigma_x/y the effective size sqrt((sigma_1^2 + sigma_2^2) / 2) of the two beams
+    # (they differ for p-ion collisions). The half-angles follow from both beams' IP angles
+    # (the other beam in its own frame). Geometric emittances with each species' beta*gamma
+    # (the line's own reference particle may be a proton; the optics are the same at equal rigidity).
+    sigma_x_b1 = (tw.rows[ip].betx[0] * colldb.nemitt_x / betagamma_b1)**0.5
+    sigma_y_b1 = (tw.rows[ip].bety[0] * colldb.nemitt_y / betagamma_b1)**0.5
+    sigma_x_b2 = (b2['betx'] * colldb.nemitt_x / betagamma_b2)**0.5
+    sigma_y_b2 = (b2['bety'] * colldb.nemitt_y / betagamma_b2)**0.5
+    sigma_x_eff = ((sigma_x_b1**2 + sigma_x_b2**2) / 2)**0.5
+    sigma_y_eff = ((sigma_y_b1**2 + sigma_y_b2**2) / 2)**0.5
     theta_x = 0.5 * (tw.rows[ip].px[0] - b2['px'])
     theta_y = 0.5 * (tw.rows[ip].py[0] + b2['py'])
-    piwinski_sq = (theta_x * sigma_z / sigma_x_ip)**2 + (theta_y * sigma_z / sigma_y_ip)**2
+    piwinski_sq = (theta_x * sigma_z / sigma_x_eff)**2 + (theta_y * sigma_z / sigma_y_eff)**2
     sigma_z_lum = sigma_z / math.sqrt(2) / math.sqrt(1 + piwinski_sq)
     print(f"Luminous region: sigma_z_lum = {sigma_z_lum*1e2:.2f} cm (bunch sigma_z = {sigma_z*1e2:.2f} cm, "
           f"half crossing = ({theta_x*1e6:.1f}, {theta_y*1e6:.1f}) urad, Piwinski = {math.sqrt(piwinski_sq):.3f})")
@@ -124,8 +119,6 @@ def FlukaBeamBeamSource(line, colldb, int_type, ip, num_particles, pdg_id_b1, p0
         line=line, particle_ref=ref_b1)
     if sigma_dpp is None:
         if line_b2 is not None:
-            pdg_b2 = 2212 if (Z2, A2) == (1, 1) else 1000000000 + Z2 * 10000 + A2 * 10
-            ref_b2 = xt.Particles.reference_from_pdg_id(pdg_id=pdg_b2, p0c=p0c_b1 / ref_b1.q0 * Z2)
             _, delta_b2 = xp.generate_longitudinal_coordinates(
                 num_particles=10000, distribution='gaussian', sigma_z=sigma_z,
                 line=line_b2, particle_ref=ref_b2)
@@ -187,27 +180,6 @@ def FlukaBeamBeamSource(line, colldb, int_type, ip, num_particles, pdg_id_b1, p0
 
     line.build_tracker()
 
-    # nemitt_x = colldb.nemitt_x
-    # nemitt_y = colldb.nemitt_y
-    # bunch_intensity = 1.8E11
-    # particles = xp.generate_matched_gaussian_bunch(
-    #     num_particles=num_particles, total_intensity_particles=bunch_intensity,
-    #     nemitt_x=nemitt_x, nemitt_y=nemitt_y, sigma_z=sigma_z,
-    #     line=line, particle_ref=xc.fluka.engine.particle_ref)
-    # tt = line.get_table()
-    # part_init = line.build_particles(x=particles.x, y=particles.y,
-    #                         px=particles.px,
-    #                         py=particles.py,
-    #                         zeta=particles.zeta,
-    #                         delta=particles.delta,
-    #                         nemitt_x=colldb.nemitt_x,
-    #                         nemitt_y=colldb.nemitt_y,
-    #                         at_element=ip,
-    #                         match_at_s=tt['s', ip],
-    #                         particle_ref=xc.fluka.engine.particle_ref,
-    #                         _capacity=_capacity,
-    # mode="normalized_transverse")
-
     # Matched Gaussian bunch at the IP itself (the matched-bunch generator matches at the
     # start of the line, i.e. IP1 for the LHC lines, whatever `ip` is)
     tt = line.get_table()
@@ -248,49 +220,28 @@ start_time = time.time()
 # Path to inputs
 path_out.mkdir(exist_ok=True)
 
-num_particles = int(100)
-
 line = xt.load(path_in / 'machines' / f'levelling.23_b{beam}.json')
 # Counter-rotating beam (in its own frame), for the optics/orbit of the other beam at the IP.
 # Set to None to mirror the tracked beam instead (assumes the beams are mirror images).
 line_b2 = xt.load(path_in / 'machines' / f'levelling.23_b{3 - beam}.json')
 colldb = xc.CollimatorDatabase.from_yaml(path_in / "colldbs" / f'levelling.23.yaml', beam=beam)
 
-if not ions:
-    # p-p example
-    part = FlukaBeamBeamSource(
-        line=line,
-        line_b2=line_b2,
-        colldb=colldb,
-        int_type=1.0, # 1.0 inelastic, 10.0 elastic, 100.0 Emd
-        ip="ip1",
-        num_particles=num_particles,
-        pdg_id_b1='proton',
-        p0c_b1=6.8e12,
-        Z_b2=1,
-        A_b2=1,
-        sigma_z = 8e-2,
-        sigma_dpp = None,
-        seed = 5656565
-    )
+q_b1 = pdg.get_properties_from_pdg_id(pdg.get_pdg_id_from_name(species_b1))[0]
 
-if ions:
-    # Pb-Pb example
-    part = FlukaBeamBeamSource(
-        line=line,
-        line_b2=line_b2,
-        colldb=colldb,
-        int_type=1.0, # 1.0 inelastic, 10.0 elastic, 100.0 Emd
-        ip="ip1",
-        num_particles=num_particles,
-        pdg_id_b1='Pb208',
-        p0c_b1=6.8e12*82,
-        Z_b2=82,
-        A_b2=208,
-        sigma_z = 8e-2,
-        sigma_dpp = None,
-        seed = 5656565
-    )
+part = FlukaBeamBeamSource(
+    line=line,
+    line_b2=line_b2,
+    colldb=colldb,
+    int_type=INTERACTION_CODE[interaction],
+    ip=ip,
+    num_particles=num_particles,
+    pdg_id_b1=species_b1,
+    p0c_b1=energy_per_charge * q_b1,
+    pdg_id_b2=species_b2,
+    sigma_z=sigma_z,
+    sigma_dpp=None,
+    seed=seed
+)
 
 
 part_alive = part.filter(part.state == 1)
