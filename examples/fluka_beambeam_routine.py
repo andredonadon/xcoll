@@ -15,8 +15,8 @@ path_out = Path.cwd()
 
 beam = 1
 ip = 'ip1'
-species_b1 = 'Pb208'          # tracked beam: 'proton', 'Pb208', 'O16', ...
-species_b2 = 'Pb208'          # other beam, can differ (p-Pb, Pb-p)
+species_b1 = 'Pb208'          # tracked beam: name ('proton', 'Pb208', 'O16', ...) or PDG ID (2212, 1000822080, ...)
+species_b2 = 'Pb208'          # other beam, same format; can differ (p-Pb, Pb-p)
 energy_per_charge = 6.8e12    # p0c per unit charge [eV], same rigidity for both beams
 interaction = 'inelastic'     # 'inelastic', 'elastic', 'emd'
 num_particles = 100
