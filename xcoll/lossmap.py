@@ -367,7 +367,16 @@ class LossMap:
                 raise ValueError(f"Unknown metadata key '{kk}'.")
 
 
-    def plot(self, **kwargs):
+    def plot(self, b2=None, **kwargs):
+        # b2: LossMap of the other beam, overlaid on the same plot
+        if b2 is not None:
+            if not isinstance(b2, LossMap):
+                raise ValueError("b2 must be a LossMap object.")
+            beam_intensity_b2 = kwargs.pop('beam_intensity_b2', kwargs.get('beam_intensity'))
+            if beam_intensity_b2 is not None and b2.num_initial > 0:
+                beam_intensity_b2 /= b2.num_initial
+            kwargs.update(lossmap_b2=b2.lossmap, rescaled_beam_intensity_b2=beam_intensity_b2,
+                          cold_regions_b2=b2._cold_regions, warm_regions_b2=b2._warm_regions)
         cold_regions = self._cold_regions
         warm_regions = self._warm_regions
         xlim = kwargs.pop('xlim', None)
