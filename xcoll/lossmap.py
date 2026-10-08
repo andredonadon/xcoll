@@ -890,8 +890,7 @@ class LossMap:
         L = self.machine_length
         pos = np.mod((aper_next_mid+aper_prev_mid)/2 + line_shift_s, L)
         if self._line_is_reversed:
-            pos = L - pos
-        pos = np.mod((aper_next_mid+aper_prev_mid)/2, line.get_length())
+            pos = np.mod(L - pos, L)
         aper_pos_dct    = dict(zip(idx, pos))
         aper_length_dct = dict(zip(idx, aper_next_mid-aper_prev_mid))
         return aper_pos_dct, aper_length_dct
