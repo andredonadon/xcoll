@@ -22,7 +22,13 @@ def plot_lossmap(lossmap: dict, *,
                  rescaled_beam_intensity=None,
                  cold_regions=None,
                  warm_regions=None,
+                 lossmap_b2=None,
+                 rescaled_beam_intensity_b2=None,
+                 cold_regions_b2=None,
+                 warm_regions_b2=None,
                  **kwargs):
+    # lossmap_b2: loss map of the other beam, overlaid on the same axes (it must use the
+    # same s coordinate, as a B2 loss map made with line_is_reversed=True does)
     import matplotlib.pyplot as plt
 
     # Resolve zoom and titles parameters
@@ -49,12 +55,20 @@ def plot_lossmap(lossmap: dict, *,
         _plot_lossmap_base(lossmap, ax=ax[0], norm=norm, energy=energy, xlim=xlim,
                            rescaled_beam_intensity=rescaled_beam_intensity, cold_regions=cold_regions,
                            warm_regions=warm_regions, **kwargs)
+        if lossmap_b2 is not None:
+            _overlay_b2(lossmap_b2, ax=ax[0], norm=norm, energy=energy, xlim=xlim,
+                        rescaled_beam_intensity=rescaled_beam_intensity_b2, cold_regions=cold_regions_b2,
+                        warm_regions=warm_regions_b2, **kwargs)
         if titles:
             ax[0].set_title(titles[0])
         for i, zz in enumerate(zoom):
             _plot_lossmap_base(lossmap, ax=ax[i+1], norm=norm, energy=energy, xlim=zz,
                                rescaled_beam_intensity=rescaled_beam_intensity, cold_regions=cold_regions,
                                warm_regions=warm_regions, **kwargs)
+            if lossmap_b2 is not None:
+                _overlay_b2(lossmap_b2, ax=ax[i+1], norm=norm, energy=energy, xlim=zz,
+                            rescaled_beam_intensity=rescaled_beam_intensity_b2, cold_regions=cold_regions_b2,
+                            warm_regions=warm_regions_b2, **kwargs)
             if titles:
                 ax[i+1].set_title(titles[i+1])
 
@@ -222,14 +236,19 @@ def _plot_lossmap_base(lossmap: dict, *,
 
     if xlim is None:
         xlim = [-0.01*L - xshift, 1.01*L - xshift]
-    if xlim[1] < xlim[0]:
-        xlim[1] += L
-        if np.isclose(xshift, 0):
-            xshift = L
+    # A window wrapping around s=0 (e.g. IP1) is shown centred on s=0
+    wrap = xlim[1] < xlim[0]
+    if wrap:
+        xlim = [xlim[0] - L, xlim[1]]
     cold_s = cold_s - xshift
     warm_s = warm_s - xshift
     aper_s = aper_s - xshift
     coll_s = coll_s - xshift
+    if wrap:
+        cold_s = np.mod(cold_s - xlim[0], L) + xlim[0]
+        warm_s = np.mod(warm_s - xlim[0], L) + xlim[0]
+        aper_s = np.mod(aper_s - xlim[0], L) + xlim[0]
+        coll_s = np.mod(coll_s - xlim[0], L) + xlim[0]
     if ylim is None:
         minimum = np.concatenate([coll_val, aper_val, cold_val, warm_val])
         minimum = minimum[minimum>0].min()
@@ -270,6 +289,23 @@ def _plot_lossmap_base(lossmap: dict, *,
 
     if legend:
         ax.legend(loc='upper right', fancybox=True, framealpha=0.8, fontsize="small")
+
+
+def _overlay_b2(lossmap_b2, *, ax, **kwargs):
+    # Draw the second beam on an axis that already shows the first one, then make the
+    # y range cover both beams and list each loss category only once in the legend
+    ylim_b1 = ax.get_ylim()
+    _plot_lossmap_base(lossmap_b2, ax=ax, **kwargs)
+    if kwargs.get('ylim') is None:
+        ylim_b2 = ax.get_ylim()
+        ylim = [min(ylim_b1[0], ylim_b2[0]), max(ylim_b1[1], ylim_b2[1])]
+        ax.set_ylim(ylim)
+        if kwargs.get('yticks') is None:
+            ax.set_yticks([10**i for i in range(int(np.log10(ylim[0])), 1 + int(np.log10(ylim[1])))])
+    if kwargs.get('legend', True):
+        labels = dict(zip(*ax.get_legend_handles_labels()[::-1]))
+        ax.legend(labels.values(), labels.keys(), loc='upper right', fancybox=True, framealpha=0.8,
+                  fontsize="small", title="B1 + B2", title_fontsize="small")
 
 
 def _valid_single_zoom(zz, allow_str=False):
