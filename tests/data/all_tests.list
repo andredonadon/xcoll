@@ -152,6 +152,11 @@ test_fluka_input.py::test_fluka_input_single[collimator]
 test_fluka_input.py::test_fluka_input_single[crystal]
 test_fluka_input.py::test_fluka_input_line[no_crystals]
 test_fluka_input.py::test_fluka_input_line[with_crystals]
+test_fluka_twiss_tfs.py::test_twiss_tfs_hllhc
+test_fluka_twiss_tfs.py::test_twiss_tfs_thick_sps
+test_fluka_twiss_tfs.py::test_twiss_tfs_rows
+test_fluka_twiss_tfs.py::test_twiss_tfs_thin_line
+test_fluka_twiss_tfs.py::test_twiss_tfs_particle
 test_geant4.py::test_reload_bdsim[ContextCpu]
 test_geant4.py::test_reload_bdsim[ContextCpu:auto]
 test_geant4.py::test_black_absorbers[ContextCpu]
